@@ -11,4 +11,5 @@ ROOT.gROOT.ProcessLine("gErrorIgnoreLevel = kError;")
 from . import utils, rootutils
 from .event import Event, EventFactory
 from .dataformats import Track, Vertex
-from .plots import Plot3D
+from .datacontainers import Histogram2D, Histogram2DFillable
+from .plots import Plot3D, HitsPlot

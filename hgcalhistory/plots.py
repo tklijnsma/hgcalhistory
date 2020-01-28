@@ -1,13 +1,49 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-import os, shutil, logging
-import os.path as osp
+import os, shutil, logging, uuid
+import os.path as osp, numpy as np
 from array import array
 import hgcalhistory
 logger = logging.getLogger('hgcalhistory')
 
 import ROOT
+
+
+
+class PlotBase(object):
+    """docstring for PlotBase"""
+
+    _has_canvas = False
+
+    @classmethod
+    def open_canvas(cls):
+        """
+        If there is no class canvas yet, open one up
+        Try to share class instances per class at least
+        """
+        if not cls._has_canvas:
+            cls.canvas = hgcalhistory.rootutils.Canvas('auto', '', 0, 0, 1000, 618 )
+            cls._has_canvas = True
+
+    def __init__(self, name):
+        super(PlotBase, self).__init__()
+        self.name = name
+        self.__class__.open_canvas()
+        self.canvas.Clear()
+        self.plotname = type(self).__name__.replace('.','')
+
+    def save(self):
+        self.canvas.save('{0}_{1}.png'.format(self.plotname, self.name))
+        self.canvas.save('{0}_{1}.pdf'.format(self.plotname, self.name))
+        
+
+
+class HitsPlot(PlotBase):
+    """
+    """
+    pass
+
 
 
 class Plot3D(object):
@@ -78,4 +114,3 @@ class Plot3D(object):
     def save(self):
         self.canvas.save('plot3d_{0}.png'.format(self.name))
         self.canvas.save('plot3d_{0}.pdf'.format(self.name))
-

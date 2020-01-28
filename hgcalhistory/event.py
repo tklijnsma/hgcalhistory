@@ -26,9 +26,6 @@ class EventFactory(object):
             yield event
 
 
-
-
-
 class Event(object):
     """
 
@@ -42,26 +39,19 @@ class Event(object):
         for t in self.rootevent.SimTracks_g4SimHits__SIM.product():
             t.__class__ = hgcalhistory.Track
             self.tracks.append(t)
+
         self.vertexs = []
         for v in self.rootevent.SimVertexs_g4SimHits__SIM.product():
             v.__class__ = hgcalhistory.Vertex
             self.vertexs.append(v)
+
+        self.calohits = self.rootevent.PCaloHitWithPositions_PCaloHitWithPositionProducer__SIM.product()
 
         self.n_tracks = len(self.tracks)
         self.n_vertexs = len(self.vertexs)
 
         self._tracks_position_collection = None
         self._vertexs_position_collection = None
-
-        # PCaloHits_g4SimHits_HGCHitsEE_SIM
-        # PCaloHits_g4SimHits_HGCHitsHEback_SIM
-        # PCaloHits_g4SimHits_HGCHitsHEfront_SIM
-
-        self.hgcal_ee_hits = []
-        for h in self.rootevent.PCaloHits_g4SimHits_HGCHitsEE_SIM.product():
-            self.hgcal_ee_hits.append(h)
-
-
 
 
     def get_vertex_by_id(self, id):
