@@ -73,3 +73,51 @@ class switchdir(object):
             return
         logger.info('chdir back to {0}'.format(self._backdir))
         if not self.dry: os.chdir(self._backdir)
+
+
+def is_string(string):
+    # Python 2 / 3 compatibility (https://stackoverflow.com/a/22679982/9209944)
+    try:
+        basestring
+    except NameError:
+        basestring = str
+    return isinstance(string, basestring)
+
+
+def smart_list_root_files(rootfiles):
+    """
+    Takes a variable input `rootfiles`, and returns a formatted list of valid paths to
+    root files.
+
+    :param rootfiles: A string or list of paths to root files, or directories containing root files
+    :type rootfiles: str, list
+    """
+
+    if is_string(rootfiles):
+        rootfiles = [rootfiles]
+
+    processed_root_files = []
+    for rootfile in rootfiles:
+        if rootfile.startswith('root:'):
+            # This is on SE
+            if hgcalhistory.seutils.isdir(rootfile):
+                # It's a directory
+                processed_root_files.extend(hgcalhistory.seutils.list_root_files(rootfile))
+            elif hgcalhistory.seutils.isfile(rootfile):
+                processed_root_files.append(hgcalhistory.seutils.format(rootfile))
+            else:
+                logger.error('Remote rootfile %s could not be found', rootfile)
+        else:
+            # This is local
+            if osp.isdir(rootfile):
+                processed_root_files.extend(
+                    glob.glob(osp.join(rootfile, '*.root'))
+                    )
+            elif osp.isfile(rootfile):
+                processed_root_files.append(rootfile)
+            else:
+                logger.error('Local rootfile %s could not be found', rootfile)
+
+    if len(processed_root_files) == 0:
+        logger.warning('No root files were found in %s', rootfiles)
+    return processed_root_files

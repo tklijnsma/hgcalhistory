@@ -12,41 +12,16 @@ logger = logging.getLogger('hgcalhistory')
 import ROOT
 
 
-# Slightly easier-to-work-with containers
+PDGID_COLORS = {
+    13 : ROOT.kBlue-9,
+    11 : ROOT.kGreen+3,
+    22 : ROOT.kRed
+    }
+PDGID_OTHER_COLOR = ROOT.kMagenta+1
 
+def pdgid_to_color(pdgid):
+    return PDGID_COLORS.get(abs(pdgid), PDGID_OTHER_COLOR)
 
-# class Vertex(object):
-#     """docstring for Vertex"""
-#     def __init__(self, vertex):
-#         super(Vertex, self).__init__()
-#         self.vertex = vertex
-
-#     def xyz(self):
-#         pos = self.vertex.position()
-#         return pos.X(), pos.Y(), pos.Z()
-
-#     def index(self):
-#         return self.vertex.vertexId()
-
-#     def track_index(self):
-#         return self.vertex.parentIndex()
-
-
-# class Track(object):
-
-#     def __init__(self, track):
-#         super(Vertex, self).__init__()
-#         self.track = track
-
-#     def xyz(self):
-#         pos = self.track.trackerSurfacePosition()
-#         return pos.X(), pos.Y(), pos.Z()
-
-#     def index(self):
-#         return self.track.trackId()
-
-#     def vertex_index(self):
-#         return self.track.vertIndex()
 
 
 class Vertex(ROOT.SimVertex):
@@ -70,13 +45,6 @@ class Vertex(ROOT.SimVertex):
 
 class Track(ROOT.SimTrack):
 
-    pdgid_line_colors = {
-        13 : ROOT.kBlue-9,
-        11 : ROOT.kGreen+3,
-        22 : ROOT.kRed
-        }
-    other_color = ROOT.kMagenta+1
-
     def __repr__(self):
         return '<Track {0} pdgid={1} x={2} y={3} z={4}>'.format(self.id(), self.pdgid(), *self.xyz())
 
@@ -97,10 +65,30 @@ class Track(ROOT.SimTrack):
         line = ROOT.TPolyLine3D(2)
         line.SetPoint(0, *vertex.xyz())
         line.SetPoint(1, *self.xyz())
-        line.SetLineColor(
-            self.pdgid_line_colors.get(abs(self.pdgid()), self.other_color)
-            )
+        line.SetLineColor(pdgid_to_color(self.pdgid()))
         ROOT.SetOwnership(line, False)
         return line
+
+
+class CaloHitWithPosition(ROOT.PCaloHitWithPosition):
+
+    def track_id(self):
+        return  self.geantTrackId()
+
+    def get_polymarker(self, track=None):
+        marker = ROOT.TPolyMarker3D(
+            1,
+            array('f', [ self.position_.x(), self.position_.y(), self.position_.z() ]),
+            # 8
+            24
+            )
+        marker.SetMarkerColor(pdgid_to_color(track.pdgid()) if track else 9)
+        marker.SetMarkerSize(0.4)
+        ROOT.SetOwnership(marker, False)
+        return marker
+
+
+
+
 
 

@@ -12,6 +12,7 @@ class EventFactory(object):
     def __init__(self, rootfile):
         super(EventFactory, self).__init__()
         self.rootfile = rootfile
+        logger.info('Opening %s', self.rootfile)
         self.tfile = ROOT.TFile.Open(self.rootfile)
         self.tree = self.tfile.Get('Events')
 
@@ -45,7 +46,10 @@ class Event(object):
             v.__class__ = hgcalhistory.Vertex
             self.vertexs.append(v)
 
-        self.calohits = self.rootevent.PCaloHitWithPositions_PCaloHitWithPositionProducer__SIM.product()
+        self.calohits = []
+        for h in self.rootevent.PCaloHitWithPositions_PCaloHitWithPositionProducer__SIM.product():
+            h.__class__ = hgcalhistory.CaloHitWithPosition
+            self.calohits.append(h)
 
         self.n_tracks = len(self.tracks)
         self.n_vertexs = len(self.vertexs)
@@ -53,6 +57,20 @@ class Event(object):
         self._tracks_position_collection = None
         self._vertexs_position_collection = None
 
+
+    def has_photon(self):
+        for track in self.tracks:
+            if track.pdgid() == 22:
+                return True
+        else:
+            return False
+
+    def has_calohits_inEE(self):
+        for hit in self.calohits:
+            if hit.inEE_:
+                return True
+        else:
+            return False
 
     def get_vertex_by_id(self, id):
         for v in self.vertexs:

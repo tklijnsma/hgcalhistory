@@ -78,3 +78,14 @@ class Histogram2DFillable(Histogram2D):
         i_y = self.find_nearest_bin_y(y)
         self.data[i_x][i_y] += value
 
+    def get_value(self, x, y):
+        self._prepare_data()
+        i_x = self.find_nearest_bin_x(x)
+        i_y = self.find_nearest_bin_y(y)
+        return self.data[i_x][i_y]
+
+    def set_value(self, x, y, value):
+        self._prepare_data()
+        i_x = self.find_nearest_bin_x(x)
+        i_y = self.find_nearest_bin_y(y)
+        self.data[i_x][i_y] = value
