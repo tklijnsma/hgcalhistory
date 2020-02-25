@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os, shutil, logging
-import os.path as osp
+import os.path as osp, numpy as np
 from array import array
 import hgcalhistory
 logger = logging.getLogger('hgcalhistory')
@@ -48,6 +48,9 @@ class Event(object):
 
         self.calohits = []
         for h in self.rootevent.PCaloHitWithPositions_PCaloHitWithPositionProducer__SIM.product():
+            # Skip any non-HGCAL hits
+            if not(h.inEE_ or h.inHsi_ or h.inHsc_):
+                continue
             h.__class__ = hgcalhistory.CaloHitWithPosition
             self.calohits.append(h)
 
@@ -84,7 +87,10 @@ class Event(object):
             if v.id() == id:
                 return v
         else:
-            return None
+            raise ValueError(
+                'Track id {0}: no such track in event. Available track ids: {1}'
+                .format(id, [v.id() for v in self.tracks])
+                )
 
     def get_vertex_for_track(self, track):
         vertex_index = track.vertex_index()
@@ -112,31 +118,57 @@ class Event(object):
 
     vertex_positions = property(_get_vertexs_position_collection)
 
-    def debug_print_decay(self):
+    def debug_content_dump(self):
         for track in self.tracks:
             vertex = self.get_vertex_for_track(track)
             if vertex is None:
                 logger.info('%s has no vertex', track)
                 continue
-
-            logger.debug(track)
-            logger.debug('  has vertex index match with {0}'.format(vertex))
-
             if vertex.track_id() != -1:
                 track_for_vertex = self.get_track_by_id(vertex.track_id())
                 if not track_for_vertex is None:
                     logger.debug(
-                        '    which has a parent track_id match with: {0}'
-                        .format(track_for_vertex)
+                        '%s  <<  Vertex %s  <<  Track %s',
+                        track, vertex.id(), track_for_vertex.id()
                         )
                 else:
                     logger.debug(
-                        '    which has a parent track_id {0} but it could not be found'
-                        .format(vertex.track_id)
+                        '%s  <<  Vertex %s  <<  Track %s (does not exist)',
+                        track, vertex.id(), vertex.track_id()
                         )
             else:
-                logger.debug('    which has no parent')
-            
+                logger.debug(
+                    '%s  <<  Vertex %s (no parent track)',
+                    track, vertex.id()
+                    )
+
+        for hit in self.calohits:
+
+            volume = 'Uns'
+            if hit.inEE_:
+                volume = 'EE '
+            elif hit.inHsc_:
+                volume = 'Hsc'
+            elif hit.inHsi_:
+                volume = 'Hsi'
+            else:
+                logger.warning('Hit %s has no HGCAL volume', hit.id())
+
+            track_id = hit.track_id()
+            if track_id == 0:
+                logger.debug('Hit %s (%s) has track id 0 (no such track)', hit.id(), volume)
+            else:
+                try:
+                    track = self.get_track_by_id(track_id)
+                    logger.debug(
+                        'Hit %s (%s) has track id %s which is pdgid %s',
+                        hit.id(), volume, track_id, track.pdgid()
+                        )
+                except ValueError:
+                    logger.debug(
+                        'Hit %s (%s) has track id %s which does not exist',
+                        hit.id(), volume, track_id
+                        )
 
 
 class PositionCollection(object):

@@ -9,7 +9,7 @@ ROOT.gROOT.SetBatch(True)
 ROOT.gROOT.ProcessLine("gErrorIgnoreLevel = kError;")
 ROOT.gStyle.SetOptStat(0)
 
-from . import utils, rootutils, seutils
+from . import utils, rootutils, seutils, physutils
 from .event import Event, EventFactory
 from .dataformats import Track, Vertex, CaloHitWithPosition
 from .datacontainers import Histogram2D, Histogram2DFillable

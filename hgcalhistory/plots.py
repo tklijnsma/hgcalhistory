@@ -11,6 +11,27 @@ import ROOT
 
 
 
+def get_plot_base(
+        x_min = 0, x_max = 1,
+        y_min = 0, y_max = 1,
+        x_title = 'x', y_title = 'y',
+        set_title_sizes = True,
+       ):
+    base = ROOT.TH1F()
+    ROOT.SetOwnership(base, False)
+    base.SetName(str(uuid.uuid4()))
+    base.GetXaxis().SetLimits(x_min, x_max)
+    base.SetMinimum(y_min)
+    base.SetMaximum(y_max)
+    base.SetMarkerColor(0)
+    base.GetXaxis().SetTitle(x_title)
+    base.GetYaxis().SetTitle(y_title)
+    if set_title_sizes:
+        base.GetXaxis().SetTitleSize(0.06)
+        base.GetYaxis().SetTitleSize(0.06)
+    return base
+
+
 class PlotBase(object):
     """docstring for PlotBase"""
 
@@ -25,6 +46,10 @@ class PlotBase(object):
         """
         if not cls._has_canvas:
             cls.canvas = hgcalhistory.rootutils.Canvas('auto', '', 0, 0, 1000, 618 )
+            logger.info(
+                'Opening new canvas %s for cls %s',
+                cls.canvas.GetName(), cls.__name__
+                )
             cls._has_canvas = True
 
     def __init__(self, name):
@@ -133,11 +158,16 @@ class HitsPlotCoded(HitsPlot):
         """
         Returns a unique integer per pdgid
         """
-        pdgid = abs(event.get_track_by_id(hit.geantTrackId()).pdgid())
-        logger.debug(
-            'Hit %s is from track %s which has pdgid %s',
-            hit.id(), hit.geantTrackId(), pdgid
-            )
+        track_id = hit.geantTrackId()
+        if track_id == 0:
+            logger.warning('Hit %s has track id 0; Will give a pdgId of 1', hit)
+            pdgid = 1
+        else:
+            pdgid = abs(event.get_track_by_id(track_id).pdgid())
+        # logger.debug(
+        #     'Hit %s is from track %s which has pdgid %s',
+        #     hit.id(), hit.geantTrackId(), pdgid
+        #     )
         # if not pdgid in self._pdgids:
         #     self._pdgids[pdgid] = self._counter_ids
         #     self._counter_ids += 1
@@ -187,6 +217,118 @@ class HitsPlotCoded(HitsPlot):
         line = ROOT.TLine(0.0, 0.0, 1.0, 1.0)
         ROOT.SetOwnership(line, False)
         line.Draw()
+        self.save()
+
+
+class HitMarkers(PlotBase):
+
+    def __init__(self, name, do_coordinate='x', do_endcap='+'):
+        super(HitMarkers, self).__init__(name)
+        self.do_coordinate = do_coordinate
+        self.do_endcap = do_endcap
+
+    def divide_hits(self, event):
+        graphs = {}
+        for hit in event.calohits:
+            if not hit.inEE_:
+                continue
+            elif self.do_endcap == '+' and hit.position_.z() < 0.:
+                continue
+            elif self.do_endcap == '-' and hit.position_.z() > 0.:
+                continue
+            layer = hit.layer_
+            if self.do_endcap == '-':
+                layer = -layer
+            z = hit.position_.z()
+            coordinate = getattr(hit.position_, self.do_coordinate)()
+
+            track_id = hit.track_id()
+            if track_id == 0:
+                pdgid = -1
+            else:
+                pdgid = abs(event.get_track_by_id(track_id).pdgid())
+
+            if not pdgid in graphs:
+                g = []
+                graphs[pdgid] = g
+            else:
+                g = graphs[pdgid]
+            # g.append((layer, coordinate))
+            g.append((z, coordinate))
+        return { key : np.array(g) for key, g in graphs.iteritems() }
+
+    def draw_tracks(self, event):
+        for track in event.tracks:
+            track.get_projected_line(
+                event.get_vertex_for_track(track),
+                do_coordinate = self.do_coordinate
+                ).Draw('SAME')
+
+    def draw_layer_lines(self, layers=[5, 10, 15, 20]):
+        for layer in layers:
+            z = hgcalhistory.physutils.get_z_for_layer(layer, do_endcap=self.do_endcap)
+            line = ROOT.TLine(z, self.y_min, z, self.y_max)
+            ROOT.SetOwnership(line, False)
+            line.SetLineColor(16)
+            line.Draw()
+
+    def legend(self):
+        self.legend = ROOT.TLegend(0.19, 0.78, 0.39, 0.98)
+        self.legend.SetBorderSize(0)
+        self.legend.SetFillStyle(0)
+        self.legend.SetNColumns(2)
+        dummies = hgcalhistory.physutils.pdgid_legend_dummies()
+        for dummy in dummies:
+            dummy.Draw('LSAME')
+            self.legend.AddEntry(dummy.GetName(), dummy.GetTitle(), 'l')
+        self.legend.Draw()
+
+    def plot(self, event):
+        super(HitMarkers, self).plot()
+
+        self.y_min = -250.
+        self.y_max = 250.
+
+        if self.do_endcap == '-':
+            # self.x_min = -55.
+            # self.x_max = 0.
+            self.x_min = 1.1 * hgcalhistory.physutils.z_neg_layers[-1]
+            self.x_max = hgcalhistory.physutils.z_neg_layers[0]
+        else:
+            # self.x_min = 0.
+            # self.x_max = 55.
+            self.x_min = hgcalhistory.physutils.z_pos_layers[0]
+            self.x_max = 1.1 * hgcalhistory.physutils.z_pos_layers[-1]
+
+        base = get_plot_base(
+            x_min = self.x_min, x_max = self.x_max,
+            y_min = self.y_min, y_max = self.y_max,
+            x_title = 'z', y_title = self.do_coordinate
+            )
+        base.Draw('P')
+
+        self.draw_layer_lines()
+
+        self.canvas.SetLeftMargin(0.14)
+        self.canvas.SetBottomMargin(0.14)
+        self.canvas.SetTopMargin(0.02)
+        self.canvas.SetRightMargin(0.02)
+
+        graphs = self.divide_hits(event)
+        for pdgid, graph in graphs.iteritems():
+            n = len(graph)
+            tgraph = ROOT.TGraph(
+                n,
+                array('f', graph[:,0]),
+                array('f', graph[:,1]),
+                )
+            ROOT.SetOwnership(tgraph, False)
+            tgraph.SetMarkerColor(hgcalhistory.physutils.pdgid_to_color(pdgid))
+            tgraph.SetMarkerStyle(24)
+            tgraph.Draw('PSAME')
+
+        self.draw_tracks(event)
+        self.legend()
         self.save()
 
 
@@ -241,6 +383,18 @@ class HitsPlotSplit(PlotBase):
         self.save()
 
 
+class HitsPlotSplitMarkers(HitsPlotSplit):
+
+    def __init__(self, name):
+        super(HitsPlotSplitMarkers, self).__init__(name)
+
+    def set_plots_to_positions(self):
+        self.hitsplot_left_upper = hgcalhistory.plots.HitMarkers(self.name, 'x', '-')
+        self.hitsplot_left_lower = hgcalhistory.plots.HitMarkers(self.name, 'y', '-')
+        self.hitsplot_right_upper = hgcalhistory.plots.HitMarkers(self.name, 'x', '+')
+        self.hitsplot_right_lower = hgcalhistory.plots.HitMarkers(self.name, 'y', '+')
+
+
 class HitsPlotSplitColorCoded(HitsPlotSplit):
 
     def __init__(self, name, color_coding='parent'):
@@ -263,6 +417,7 @@ class Plot3D(PlotBase):
 
     def plot(self, event):
         super(Plot3D, self).plot()
+        self.canvas.SetCanvasSize(1000, 718)
         self.draw_axes()
         self.view.SetRange(*event.track_positions.minmax_xyz())
         self.draw_helplines(*event.track_positions.minmax_xyz())
@@ -270,7 +425,7 @@ class Plot3D(PlotBase):
         self.save()
 
     def draw_vertices_and_tracks(self, event):
-        event.vertex_positions.as_tpolymarker3d().Draw()
+        # event.vertex_positions.as_tpolymarker3d().Draw()
         for track in event.tracks:
             track.get_polyline(event.get_vertex_for_track(track)).Draw()
 
@@ -336,4 +491,8 @@ class Plot3DWithCaloHits(Plot3D):
         """
         super(Plot3DWithCaloHits, self).draw_vertices_and_tracks(event)
         for hit in event.calohits:
-            hit.get_polymarker(track = event.get_track_by_id(hit.track_id())).Draw()
+            track_id = hit.track_id()
+            if track_id == 0:
+                hit.get_polymarker().Draw()
+            else:
+                hit.get_polymarker(track = event.get_track_by_id(hit.track_id())).Draw()
