@@ -16,7 +16,7 @@ class Vertex(ROOT.SimVertex):
 
     def __repr__(self):
         return (
-            '<Vertex {0} x={1:.1f} y={2:.1f} z={3:.1f}>'
+            '<Vertex {0} x={1:.3f} y={2:.3f} z={3:.3f}>'
             .format(self.id(), *self.xyz())
             )
 
@@ -33,8 +33,28 @@ class Vertex(ROOT.SimVertex):
 
 class Track(ROOT.SimTrack):
 
+    width = 8
+    digits = 3
+
+    def formatfloat(self, float):
+        return (
+            '{0:+{width}.{digits}f}'
+            .format(float, width=self.width, digits=self.digits)
+            )
+
     def __repr__(self):
-        return '<Track {0:<5} pdgid={1:<5} x={2:+6.1f} y={3:+6.1f} z={4:+6.1f}>'.format(self.id(), self.pdgid(), *self.xyz())
+        return (
+            '<Track {0:<5} pdgid={1:<5} E={2} x={3} y={4} z={5}'
+            .format(
+                self.id(), self.pdgid(),
+                self.formatfloat(self.energy()),
+                *[self.formatfloat(x) for x in self.xyz()]
+                )
+            )
+
+    def energy(self):
+        # return self.trackerSurfaceMomentum().energy()
+        return self.momentum().E()
 
     def xyz(self):
         pos = self.trackerSurfacePosition()

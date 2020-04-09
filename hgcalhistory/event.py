@@ -129,17 +129,17 @@ class Event(object):
                 if not track_for_vertex is None:
                     logger.debug(
                         '%s  <<  Vertex %s  <<  Track %s',
-                        track, vertex.id(), track_for_vertex.id()
+                        track, vertex, track_for_vertex.id()
                         )
                 else:
                     logger.debug(
                         '%s  <<  Vertex %s  <<  Track %s (does not exist)',
-                        track, vertex.id(), vertex.track_id()
+                        track, vertex, vertex.track_id()
                         )
             else:
                 logger.debug(
                     '%s  <<  Vertex %s (no parent track)',
-                    track, vertex.id()
+                    track, vertex
                     )
 
         for hit in self.calohits:

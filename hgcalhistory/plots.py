@@ -4,6 +4,7 @@ from __future__ import print_function
 import os, shutil, logging, uuid, copy
 import os.path as osp, numpy as np
 from array import array
+from math import pi
 import hgcalhistory
 logger = logging.getLogger('hgcalhistory')
 
@@ -419,15 +420,81 @@ class Plot3D(PlotBase):
         super(Plot3D, self).plot()
         self.canvas.SetCanvasSize(1000, 718)
         self.draw_axes()
-        self.view.SetRange(*event.track_positions.minmax_xyz())
-        self.draw_helplines(*event.track_positions.minmax_xyz())
+        # self.view.SetRange(*event.track_positions.minmax_xyz())
+        # self.draw_helplines(*event.track_positions.minmax_xyz())
+        self.minmax = (
+            -250., # x min
+            -250.0, # y min
+            -550.0, # z min
+            250.0, # x max
+            250.0, # y max
+            550.0, # z max
+            )
+        self.view.SetRange(*self.minmax)
+        # self.draw_plane(hgcalhistory.physutils.z_pos_layers[0])
+        # self.draw_plane(hgcalhistory.physutils.z_neg_layers[0])
+        self.draw_helplines(*self.minmax)
         self.draw_vertices_and_tracks(event)
+
+        # self.view.RotateView(45., 135.)
+        # someint = ROOT.Int_t(0.)
+        # self.view.SetView(10., 10., 10., someint)
+
         self.save()
 
     def draw_vertices_and_tracks(self, event):
         # event.vertex_positions.as_tpolymarker3d().Draw()
         for track in event.tracks:
             track.get_polyline(event.get_vertex_for_track(track)).Draw()
+
+    def draw_plane(self, z):
+        # plane = ROOT.TF2(
+        #     str(uuid.uuid4()),
+        #     '0*x + 0*y + {0}'.format(z),
+        #     self.minmax[0], self.minmax[3],
+        #     self.minmax[1], self.minmax[4]
+        #     )
+        # # plane.SetNpx(100)
+        # # plane.SetNpy(100)
+        # ROOT.SetOwnership(plane, False)
+        # plane.Draw('lego2 same0 fb bb a')
+        # plane.SetFillColorAlpha(ROOT.kRed, 0.5)
+        # plane.SetLineColorAlpha(ROOT.kRed, 0.5)
+
+        n_lines = 15
+        xmin = self.minmax[0]
+        xmax = self.minmax[3]
+        ymin = self.minmax[1]
+        ymax = self.minmax[4]
+        dx = (xmax-xmin)/(n_lines-1)
+        dy = (ymax-ymin)/(n_lines-1)
+
+        x = xmin
+        for i in range(n_lines):
+            line = ROOT.TPolyLine3D(
+                2,
+                array('f', [ x, x ]),
+                array('f', [ ymin, ymax ]),
+                array('f', [ z, z ]),
+                )
+            line.SetLineColorAlpha(ROOT.kGray, 0.5)
+            line.Draw()
+            ROOT.SetOwnership(line, False)
+            x += dx 
+
+        y = ymin
+        for i in range(n_lines):
+            line = ROOT.TPolyLine3D(
+                2,
+                array('f', [ xmin, xmax ]),
+                array('f', [ y, y ]),
+                array('f', [ z, z ]),
+                )
+            line.SetLineColorAlpha(ROOT.kGray, 0.5)
+            line.Draw()
+            ROOT.SetOwnership(line, False)
+            y += dy
+
 
     def draw_axes(self):
         self.view = ROOT.TView.CreateView(1)
