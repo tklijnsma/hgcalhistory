@@ -1,37 +1,60 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os, shutil, logging
-import os.path as osp, numpy as np
+import os.path as osp, numpy as np, glob
 from array import array
 import hgcalhistory
 logger = logging.getLogger('hgcalhistory')
 import ROOT
 
-class EventFactory(object):
-    """docstring for EventFactory"""
-    def __init__(self, rootfile):
-        super(EventFactory, self).__init__()
-        self.rootfile = rootfile
-        logger.info('Opening %s', self.rootfile)
-        self.tfile = ROOT.TFile.Open(self.rootfile)
-        self.tree = self.tfile.Get('Events')
+import utils
+from physutils import (
+    hgcal_zmin_pos,
+    hgcal_zmax_pos,
+    hgcal_zmin_neg,
+    hgcal_zmax_neg,
+    )
 
-    def __del__(self):
-        try:
-            self.tfile.Close()
-        except:
-            pass
+class EventFactory(object):
+    def __init__(self, *args, **kwargs):
+        super(EventFactory, self).__init__()
+        self.rootfiles = []
+        for path in args:
+            if path.endswith('.root'):
+                self.rootfiles.append(path)
+            elif path.startswith('root:'):
+                import qondor
+                qondor.subprocess_logger.setLevel(logging.ERROR)
+                self.rootfiles.extend(qondor.seutils.ls_root(path))
+            else:
+                self.rootfiles.extend(glob.glob(osp.join(path, '*.root')))
+        self.max_events = kwargs.get('max_events', None)
+        self.tree = ROOT.TChain('Events')
+        for rootfile in self.rootfiles:
+            self.tree.Add(rootfile)
+        # self.tree.__class__ = Event
+        self.n_events = self.tree.GetEntries()
+        logger.info(
+            'Initialized factory with %s root files, %s events',
+            len(self.rootfiles), self.n_events
+            )
 
     def __iter__(self):
-        for event in self.tree:
-            yield event
+        for i_event in range(self.n_events):
+            if i_event == self.max_events: raise StopIteration
+            self.tree.GetEntry(i_event)
+            yield Event(self.tree)
+
+    def get(self, i):
+        self.tree.GetEntry(i)
+        return Event(self.tree)
+
+    def __len__(self):
+        return self.n_events if (self.max_events is None) else min(self.n_events, self.max_events)
+
 
 
 class Event(object):
-    """
-
-    """
-
     def __init__(self, rootevent):
         super(Event, self).__init__()
         self.rootevent = rootevent
@@ -169,6 +192,137 @@ class Event(object):
                         'Hit %s (%s) has track id %s which does not exist',
                         hit.id(), volume, track_id
                         )
+
+    def get_tracks_columnar(self, only_in_hgcal=True, filter_zero_tracks=True):
+        """
+        Returns the tracks in the event as columnar data
+        Currently there are 8 columns. See the first lists in the code, below:        
+        """
+        track_x = []
+        track_y = []
+        track_z = []
+        vertex_x = []
+        vertex_y = []
+        vertex_z = []
+        pdgids = []
+        track_ids = []
+        vertex_ids = []
+
+        for track in self.tracks:
+            x_t, y_t, z_t = track.xyz()
+
+            if filter_zero_tracks and x_t == 0. and y_t == 0. and z_t == 0.:
+                logger.warning('Skipping %s ; points to origin', track)
+                continue
+
+            vertex = self.get_vertex_for_track(track)
+            if vertex is None:
+                logger.warning('Skipping track %s, no vertex associated', track)
+                continue
+
+            # logger.debug('%s --> %s', track, vertex)
+
+            x_v, y_v, z_v = vertex.xyz()
+
+            # Skip if not in hgcal
+            if only_in_hgcal:
+                if z_t > 0. and (
+                    z_t < hgcal_zmin_pos and z_v < hgcal_zmin_pos
+                    or z_t > hgcal_zmax_pos and z_v > hgcal_zmax_pos
+                    ):
+                    continue
+                elif z_t < 0. and (
+                    z_t < hgcal_zmin_neg and z_v < hgcal_zmin_neg
+                    or z_t > hgcal_zmax_neg and z_v > hgcal_zmax_neg
+                    ):
+                    continue
+
+            track_x.append(x_t)
+            track_y.append(y_t)
+            track_z.append(z_t)
+            vertex_x.append(x_v)
+            vertex_y.append(y_v)
+            vertex_z.append(z_v)
+            pdgids.append(track.pdgid())
+            track_ids.append(track.id())
+            vertex_ids.append(vertex.id())
+
+        columns = np.stack(
+            (
+                np.array(track_x),
+                np.array(track_y),
+                np.array(track_z),
+                np.array(vertex_x),
+                np.array(vertex_y),
+                np.array(vertex_z),
+                np.array(pdgids),
+                np.array(track_ids),
+                np.array(vertex_ids)
+                )
+            ).T
+        assert columns.shape == (len(track_x), 9)
+        return columns
+
+    def get_hits_columnar(self, only_in_hgcal=True):
+        xs = []
+        ys = []
+        zs = []
+        layers = []
+        times = []
+        energies = []
+        track_ids = []
+        which_detector = []
+        pdgids = []
+        for hit in self.calohits:
+            x, y, z = hit.xyz()
+
+            # Skip if not in hgcal
+            if only_in_hgcal and not hgcalhistory.physutils.in_hgcal(z):
+                continue
+
+            xs.append(x)
+            ys.append(y)
+            zs.append(z)
+            layers.append(hit.layer_)
+            times.append(hit.time())
+            energies.append(hit.energy())
+            track_id = hit.geantTrackId()
+            track_ids.append(track_id)
+
+            if hit.inEE_:
+                det = 1
+            elif hit.inHsi_:
+                det = 2
+            elif hit.inHsc_:
+                det = 3
+            else:
+                det = 0
+            which_detector.append(det)
+
+            # expensive loop
+            for t in self.tracks:
+                if t.id() == track_id:
+                    pdgid = t.pdgid()
+                    break
+            else:
+                pdgid = 0
+            pdgids.append(pdgid)
+
+        columns = np.stack(
+            (
+                np.array(xs),
+                np.array(ys),
+                np.array(zs),
+                np.array(layers),
+                np.array(times),
+                np.array(energies),
+                np.array(track_ids),
+                np.array(which_detector),
+                np.array(pdgids)
+                )
+            ).T
+        assert columns.shape == (len(xs), 9)
+        return columns
 
 
 class PositionCollection(object):

@@ -61,6 +61,23 @@ z_neg_layers = [
     -358.68725586, -360.71276855, -361.65725708,
     ]
 
+hgcal_zmin_pos = min(z_pos_layers)
+hgcal_zmax_pos = max(z_pos_layers)
+hgcal_zmin_neg = min(z_neg_layers)
+hgcal_zmax_neg = max(z_neg_layers)
+
+def in_hgcal(z):
+    """
+    Determines whether z is in hgcal
+    """
+    return in_hgcal_pos(z) or in_hgcal_neg(z)
+
+def in_hgcal_pos(z):
+    return z >= hgcal_zmin_pos and z <= hgcal_zmax_pos
+
+def in_hgcal_neg(z):
+    return z >= hgcal_zmin_neg and z <= hgcal_zmax_neg
+
 def get_z_for_layer(layer, do_endcap='+'):
     if not layer in layers:
         raise ValueError(
