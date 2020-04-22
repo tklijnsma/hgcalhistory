@@ -6,21 +6,31 @@ It now requires also a new DataFormat `PCaloHitWithPosition`, which is like a PC
 
 ## Installation
 
+Various approaches possible, but for example:
+
 ```
-cmsrel CMSSW_11_0_0_pre10
-cd CMSSW_11_0_0_pre10/src
+cmsrel CMSSW_11_1_0_pre6
+cd CMSSW_11_1_0_pre6/src
 cmsenv
 
 git clone https://github.com/tklijnsma/DataFormats-HGCALHistoryFormats.git DataFormats/HGCALHistoryFormats
 scram b
 
-virtualenv hgcalenv
-source hgcalenv/bin/activate
-git clone https://github.com/tklijnsma/hgcalhistory.git
-pip install -e hgcalhistory
+git clone https://github.com/tklijnsma/hgcalhistory.git NonPackage/NonPackage/hgcalhistory
+cd NonPackage/NonPackage
+
+export pip_install_dir="${PWD}/local"
+mkdir -p "${pip_install_dir}/bin"
+mkdir -p "${pip_install_dir}/lib/python2.7/site-packages/"
+export PATH="${pip_install_dir}/bin:${PATH}"
+export PYTHONPATH="${pip_install_dir}/lib/python2.7/site-packages:${PYTHONPATH}"
+
+pip install --install-option="--prefix=${pip_install_dir}" -e hgcalhistory
 ```
 
 ## Example
+
+See the notebook: [eventdisplays](./eventdisplay.ipynb).
 
 ```
 import hgcalhistory
